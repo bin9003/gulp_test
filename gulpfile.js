@@ -6,10 +6,10 @@ var plugins = require('gulp-load-plugins')();
 //var plugins = gulpLoadPlugins();
 
 var path = {
-
+	dir: 'app/',
 	//
 	Dist: 'app/dist/', 			//发布根目录
-	Src: "app/client/", 	//开发根目录
+	Src: 'app/client/', 	//开发根目录
 
 	// css 
 	cssPath: 'app/client/css/', // 开发目录 css
@@ -35,27 +35,44 @@ var path = {
 //创建一个名为js的任务
 gulp.task('js', function(){
   // 首先取得app/static/scripts下的所有为.js的文件（**/的意思是包含所有子文件夹)
-  return gulp.src(path.jsPath + '**/*.js')
+  return gulp.src([path.jsPath + '**/*.js', path.jsPath + '*.js'])
     //错误管理模块（有错误时会自动输出提示到终端上）
     .pipe(plugins.plumber())
+    // 合并文件并重新命名
+    // .pipe(plugins.concat('main.min.js'))
     //合并同一目录下的所有文件,并将合并的目录名作为合并后的文件名
-    .pipe(plugins.concatDir({ext: '.min.js'}))
+    // .pipe(plugins.concatDir({ext: '.min.js'}))
     //js压缩
     .pipe(plugins.uglify())
     //将合并压缩后的文件输出到dist/static/scripts下（假如没有dist目录则自动生成dist目录）
     .pipe(gulp.dest(path.jsDist))
 });
 
-
+// css
+//css
+gulp.task('minifycss', function (){
+    gulp.src([path.cssPath + '*/*.css', path.cssPath + '*.css'])
+		.pipe(plugins.autoprefixer('last 2 version', 'safari 5', 'ie 8', 'ie 9', 'opera 12.1', 'ios 6', 'android 4'))
+		.pipe( plugins.replace( '/' + path.Src, '/'+path.Dist))
+        // .pipe(plugins.concatDir({ext: '.css'}))//合成到一个css
+        .pipe(gulp.dest( path.cssDist ))//输出到css目录
+        .pipe(plugins.minifyCss())//压缩css到一样
+        .pipe(plugins.rename({ suffix: '.min' }))
+		.pipe( plugins.replace( '/' + path.Src, '/'+path.Dist))
+        // .pipe(plugins.concatDir({ext: '.min.css')})// 以目录名，为文件名 --- 压缩后的css
+        .pipe(gulp.dest( path.cssDist ));//输出到css目录
+});
 
 // sass
 gulp.task('sass', function() { 
   return gulp.src([path.sassPath + '*.scss', path.sassPath + '*/*.scss'])
     .pipe(plugins.sass({ outputStyle: 'compact' }).on('error', plugins.sass.logError))
     .pipe(plugins.autoprefixer('last 2 version', 'safari 5', 'ie 8', 'ie 9', 'opera 12.1', 'ios 6', 'android 4'))
+	.pipe( plugins.replace( '/' + path.Src, '/'+path.Dist))
     .pipe(gulp.dest(path.sassDist))
     .pipe(plugins.rename({ suffix: '.min' }))
     .pipe(plugins.minifyCss())
+	.pipe( plugins.replace( '/' + path.Src, '/'+path.Dist))
     .pipe(gulp.dest(path.sassDist))
     .pipe(plugins.notify({ message: 'Styles task complete' }));
 });
@@ -95,6 +112,7 @@ gulp.task( 'htmlmin', function()
 		/* 更改html 引用路径：css/js文件的后缀名 */
 		.pipe( plugins.replace( '.css"', '.min.css"' ) )
 		.pipe( plugins.replace( '.js"', '.min.js"' ) )
+		.pipe( plugins.replace( '/client/', '/dist/'))
 		.pipe( plugins.htmlmin( { collapseWhitespace: true } ) )
  
 		.pipe( gulp.dest( path.htmlDist ) )
@@ -111,7 +129,7 @@ gulp.task('redist', function(){
   //先运行clean，然后并行运行html,js,less,images,watch
   //如果不使用gulp-run-sequence插件的话，由于gulp是并行执行的
   //有可能会出现一种情况（其他文件处理速度快的已经处理完了，然后clean最后才执行，会把前面处理完的文件删掉，所以要用到runSequence）
-  plugins.runSequence('cleanDist', ['js', 'sass', 'images', 'htmlmin'])
+  plugins.runSequence('cleanDist', ['js', 'sass', 'minifycss', 'images', 'htmlmin'], 'watch', 'webserver')
 })
 
 //创建一个名为default的任务（上面的任务都可以没有，但是这个任务必须有，不然在终端执行gulp命令会报错）
@@ -120,8 +138,25 @@ gulp.task('default', ['redist']);
 
 
 
+gulp.task('watch', function () {
+	gulp.watch(path.jsPath + '**/*.js', ['js']);
+	gulp.watch([path.cssPath + '*/*.css', path.cssPath + '*.css'], ['minifycss']);
+	gulp.watch([path.sassPath + '*.scss', path.sassPath + '*/*.scss'], ['sass']);
+	gulp.watch([path.imgPath + '**/*.{png,jpg,jpeg,ico,gif,svg}', path.imgPath + '*.{png,jpg,jpeg,ico,gif,svg}'], ['images']);
+	gulp.watch([path.htmlPath + '*.html', path.htmlPath + '*/*.html'], ['htmlmin']);
+})
 
 
+/* 使用webserver 自动刷新页面 */
+gulp.task( 'webserver', function()
+{
+	gulp.src( './' ) 								// 服务器目录（./代表根目录）
+		.pipe( plugins.webserver( { 						// 运行gulp-webserver
+			livereload: true, 						// 启用LiveReload
+			directoryListing: true,						//是否显示目录列表
+			open: true 							// 服务器启动时自动打开网页
+		} ) );
+} );
 
 
 
